@@ -27,8 +27,13 @@ pip install -e .
 
 ### Docker
 ```bash
+touch cdps.sqlite
 docker build -t cdpnotify .
-docker run --rm -v /etc/localtime:/etc/localtime:ro -v `pwd`:/cdpnotify -it cdpnotify
+docker run --rm \
+    -v /etc/localtime:/etc/localtime:ro \
+    -v `pwd`/config.json:/cdpnotify/config.json \
+    -v `pwd`/cdps.sqlite:/cdpnotify/cdps.sqlite \
+    -it cdpnotify
 ```
 
 ### Software requirements
