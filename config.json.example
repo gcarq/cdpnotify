@@ -1,0 +1,5 @@
+{
+  "tub_address": "0x448a5065aeBB8E423F0896E6c5D525C040f59af3",
+  "hosted_node_url": "http://localhost:8545",
+  "telegram_token": "<your_token>"
+}
