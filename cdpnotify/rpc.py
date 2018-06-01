@@ -8,7 +8,7 @@ from telegram.error import NetworkError, TelegramError
 from telegram.ext import CommandHandler, Updater
 from telegram.parsemode import ParseMode
 
-from cdpnotify.__main__ import populate_liquidation_values, get_cdp_by_id
+from cdpnotify.chain import populate_liquidation_values, get_cdp_by_id
 from cdpnotify.persistence import CDPEntity
 
 logger = logging.getLogger(__name__)
