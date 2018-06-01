@@ -1,3 +1,4 @@
 SQLAlchemy==1.2.7
 web3==4.2.1
 python-telegram-bot==10.1.0
+tabulate==0.8.2

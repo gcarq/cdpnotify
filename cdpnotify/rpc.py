@@ -2,11 +2,13 @@ import logging
 from typing import List
 
 from sqlalchemy import and_
+from tabulate import tabulate
 from telegram.bot import Bot, Update
 from telegram.error import NetworkError, TelegramError
 from telegram.ext import CommandHandler, Updater
 from telegram.parsemode import ParseMode
 
+from cdpnotify.__main__ import populate_liquidation_values, get_cdp_by_id
 from cdpnotify.persistence import CDPEntity
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ def init(token: str) -> None:
         CommandHandler('help', _help_callback),
         CommandHandler('watch', _watch_callback, pass_args=True),
         CommandHandler('unwatch', _unwatch_callback, pass_args=True),
+        CommandHandler('status', _status_callback),
     ]
     for handle in handles:
         UPDATER.dispatcher.add_handler(handle)
@@ -42,6 +45,8 @@ def init(token: str) -> None:
 
 def _watch_callback(bot: Bot, update: Update, args: List[str]) -> None:
     """ /watch callback """
+    logger.info('watch callback called')
+
     if not 0 < len(args) < 3:
         _help_callback(bot, update)
         return
@@ -87,6 +92,8 @@ def _watch_callback(bot: Bot, update: Update, args: List[str]) -> None:
 
 def _unwatch_callback(bot: Bot, update: Update, args: List[str]) -> None:
     """ /unwatch callback """
+    logger.info('unwatch callback called')
+
     if len(args) != 1:
         _help_callback(bot, update)
         return
@@ -115,19 +122,56 @@ def _unwatch_callback(bot: Bot, update: Update, args: List[str]) -> None:
     send_msg(msg, update.message.chat.id, bot=bot)
 
 
+def _status_callback(bot: Bot, update: Update) -> None:
+    """ /status callback """
+    logger.info('status callback called')
+
+    entities = CDPEntity.query.filter(
+        CDPEntity.telegram_user_id == update.message.from_user.id,
+    ).all()
+
+    if not entities:
+        msg = 'There is no CDP on your watchlist!'
+
+    else:
+        data = []
+        for entity in entities:
+            cdp = get_cdp_by_id(entity.cdp_id)
+            populate_liquidation_values(cdp)
+            data.append([
+                'CDP-{}'.format(entity.cdp_id),
+                '{}%'.format(round(cdp['col_ratio'] * 100, 2)),
+                '{}$'.format(round(cdp['liq_price'], 2)),
+            ])
+        msg = tabulate(
+            data,
+            headers=['ID', 'Ratio', 'Liq. Price'],
+            tablefmt='simple',
+        )
+        msg = '<pre>{}</pre>'.format(msg)
+
+    send_msg(msg, update.message.chat.id, bot=bot, parse_mode=ParseMode.HTML)
+
+
 def _help_callback(bot: Bot, update: Update) -> None:
     """ /help callback """
-    message = '*/watch <cdp_id> [<ratio>]:* Add a CDP with the given ID to your watchlist.\n' \
-              'The bot will send you a private notification if the collateralization is below the given ratio `(default=200%)`\n' \
-              '\n' \
-              '*/unwatch <cdp_id>*: Remove CDP from your watchlist\n' \
-              '*/help*: Show this message'
+    logger.info('help callback called')
+    msg = '*/watch <cdp_id> [<ratio>]:* Add a CDP with the given ID to your watchlist.\n' \
+          'The bot will send you a private notification if the collateralization is below the given ratio `(default=200%)`\n' \
+          '\n' \
+          '*/unwatch <cdp_id>*: Remove CDP from your watchlist\n' \
+          '\n' \
+          '*/status*: Show your current watchlist\n' \
+          '\n' \
+          '*/help*: Show this message'
 
-    send_msg(message, update.message.chat.id, bot=bot)
+    send_msg(msg, update.message.chat.id, bot=bot)
 
 
-def send_msg(msg: str, user_id: str, bot: Bot = None) -> None:
+def send_msg(msg: str, user_id: str, bot: Bot = None, parse_mode: ParseMode = ParseMode.MARKDOWN) -> None:
     """ Sends a message to the given user or chat_id """
+    logger.debug('Sending telegram message')
+
     bot = bot or UPDATER.bot
 
     try:
@@ -135,7 +179,7 @@ def send_msg(msg: str, user_id: str, bot: Bot = None) -> None:
             bot.send_message(
                 user_id,
                 text=msg,
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=parse_mode,
             )
         except NetworkError as network_err:
             # Sometimes the telegram server resets the current connection,
@@ -147,7 +191,7 @@ def send_msg(msg: str, user_id: str, bot: Bot = None) -> None:
             bot.send_message(
                 user_id,
                 text=msg,
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=parse_mode,
             )
     except TelegramError as telegram_err:
         logger.warning(
